@@ -16,7 +16,7 @@ recording = False
 video_writer = None
 
 FPS = 20
-FOURCC = cv2.VideoWriter_fourcc(*"mp4v")
+FOURCC = cv2.VideoWriter_fourcc(*"avc1")
 
 os.makedirs("videos", exist_ok=True)
 
