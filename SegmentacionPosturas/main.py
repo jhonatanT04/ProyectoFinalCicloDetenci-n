@@ -1,5 +1,6 @@
 import asyncio
 import websockets
+
 import cv2
 import numpy as np
 import pygame
@@ -10,24 +11,19 @@ import viewFrame
 import time
 import os
 from datetime import datetime
-
+from telegram import enviar_video
 person_detected_since = None
 recording = False
 video_writer = None
 
-FPS = 20
-FOURCC = cv2.VideoWriter_fourcc(*"MJPG")
-
 os.makedirs("videos", exist_ok=True)
-
-
 
 WS_URL = "ws://localhost:9002"
 clock = pygame.time.Clock()
 
 async def receive_video():
-    global person_detected_since, recording, video_writer
     async with websockets.connect(WS_URL, max_size=2**25) as ws:
+        global person_detected_since, recording, video_writer
         print("Conectado al servidor WebSocket")
 
         while True:
@@ -63,28 +59,34 @@ async def receive_video():
                 print("Error decodificando imagen")
                 continue
             detections = data.get("detections", [])
+            
+            viewFrame.mostrar_frame(frame, detections)
 
             current_time = time.time()
-
+            
             if len(detections) > 0:
                 if person_detected_since is None:
                     person_detected_since = current_time
 
                 elapsed = current_time - person_detected_since
                 if elapsed >= 5 and not recording:
-                    filename = datetime.now().strftime("videos/persona_%Y%m%d_%H%M%S.avi")
+                    filename = datetime.now().strftime("videos/persona_%Y%m%d_%H%M%S.mp4")
                     h, w, _ = frame.shape
-                    video_writer = cv2.VideoWriter(filename, FOURCC, FPS, (w, h))
+                    video_writer = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*"XVID"), 25.0, (w, h))
+                    video_writer.write(viewFrame.img_procesada(frame, detections))
                     recording = True
-                    print(f"Grabando video: {filename}")
+                    
+                elif recording:
+                    
+                    video_writer.write(viewFrame.img_procesada(frame, detections))
             else:
                 person_detected_since = None
                 if recording:
                     recording = False
                     video_writer.release()
-                    video_writer = None
-                    print("⏹️ Grabación finalizada")         
-            viewFrame.mostrar_frame(frame, detections)
+                    # enviar_video(filename, caption="Video de persona detectada")
+                    video_writer = None       
+            
 
             clock.tick(30)
 

@@ -32,3 +32,24 @@ def mostrar_frame(frame, detections):
 
     screen.blit(surface, (0, 0))
     pygame.display.update()
+    
+def img_procesada(frame, detections):
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Dibujar detecciones
+    for d in detections:
+        x, y, w, h = d["x"], d["y"], d["w"], d["h"]
+        label = d["label"]
+        score = d["score"]
+
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(
+            frame,
+            f"{label} {score:.2f}",
+            (x, y - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1
+        )
+    return frame
