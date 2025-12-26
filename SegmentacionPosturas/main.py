@@ -16,7 +16,7 @@ recording = False
 video_writer = None
 
 FPS = 20
-FOURCC = cv2.VideoWriter_fourcc(*"avc1")
+FOURCC = cv2.VideoWriter_fourcc(*"MJPG")
 
 os.makedirs("videos", exist_ok=True)
 
@@ -72,7 +72,7 @@ async def receive_video():
 
                 elapsed = current_time - person_detected_since
                 if elapsed >= 5 and not recording:
-                    filename = datetime.now().strftime("videos/persona_%Y%m%d_%H%M%S.mp4")
+                    filename = datetime.now().strftime("videos/persona_%Y%m%d_%H%M%S.avi")
                     h, w, _ = frame.shape
                     video_writer = cv2.VideoWriter(filename, FOURCC, FPS, (w, h))
                     recording = True
