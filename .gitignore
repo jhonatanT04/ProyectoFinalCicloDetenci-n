@@ -1,3 +1,9 @@
+.gitignore
 .venv
 .vscode
 SegmentacionPosturas/__pycache__
+build
+EntrenamientoSVM/Person-detection-7
+EntrenamientoSVM/street-objects-3
+lbp-library
+vision.bin
