@@ -1,7 +1,7 @@
 .gitignore
 .venv
 .vscode
-SegmentacionPosturas/__pycache__
+interfaceApp/__pycache__
 build
 EntrenamientoSVM/Person-detection-7
 EntrenamientoSVM/street-objects-3
@@ -13,4 +13,4 @@ EntrenamientoSVM/negativos
 cascade/data
 cascade/negativos
 cascade/Personas
-SegmentacionPosturas/videos
+interfaceApp/videos
