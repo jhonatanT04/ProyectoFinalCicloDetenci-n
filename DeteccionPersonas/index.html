@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Detección de Personas - OpenCV + WebSocket</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #0f0;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Streaming OpenCV (C++) vía WebSocket</h2>
+<p>Detección de personas con HOG + SVM</p>
+
+<canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const ws = new WebSocket("ws://localhost:9001");
+
+    ws.onopen = () => {
+        console.log("🟢 Conectado al servidor WebSocket");
+    };
+
+    ws.onclose = () => {
+        console.log("🔴 Desconectado del servidor");
+    };
+
+    ws.onerror = (err) => {
+        console.error("❌ Error WebSocket:", err);
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type !== "frame") return;
+
+        const img = new Image();
+        img.src = "data:image/jpeg;base64," + msg.image;
+
+        img.onload = () => {
+            canvas.width = msg.width;
+            canvas.height = msg.height;
+
+            // Dibujar frame
+            ctx.drawImage(img, 0, 0);
+
+            // Dibujar detecciones
+            ctx.strokeStyle = "lime";
+            ctx.lineWidth = 2;
+            ctx.font = "16px Arial";
+            ctx.fillStyle = "lime";
+
+            msg.detections.forEach(det => {
+                ctx.strokeRect(det.x, det.y, det.w, det.h);
+                ctx.fillText(
+                    `Persona ${det.score.toFixed(2)}`,
+                    det.x,
+                    det.y > 20 ? det.y - 5 : det.y + 15
+                );
+            });
+        };
+    };
+</script>
+
+</body>
+</html>

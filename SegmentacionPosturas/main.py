@@ -1,94 +1,137 @@
-import asyncio
-import websockets
-
+import websocket
+import json
+import base64
 import cv2
 import numpy as np
 import pygame
-import json
-import base64
-import viewFrame
-
+# from telegram import enviar_video
 import time
-import os
 from datetime import datetime
-from telegram import enviar_video
+import mediapipe as mp
+
+pygame.init()
+clock = pygame.time.Clock()
 person_detected_since = None
 recording = False
 video_writer = None
 
-os.makedirs("videos", exist_ok=True)
 
-WS_URL = "ws://localhost:9002"
-clock = pygame.time.Clock()
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
 
-async def receive_video():
-    async with websockets.connect(WS_URL, max_size=2**25) as ws:
-        global person_detected_since, recording, video_writer
-        print("Conectado al servidor WebSocket")
+# Crear instancia global (más eficiente)
+pose_detector = mp_pose.Pose(
+    static_image_mode=False,
+    model_complexity=1,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
 
-        while True:
-            # Manejo eventos pygame
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    return
 
-            msg = await ws.recv()
+def on_message(ws, message):
+    global person_detected_since, recording, video_writer, filename
+    data = json.loads(message)
+    
+    if data.get("type") != "frame":
+        return
+    
+    img_base64 = data["image"]
+    img_bytes = base64.b64decode(img_base64)
 
-            # 🔴 Ahora es JSON (str)
-            if not isinstance(msg, str):
-                print("Mensaje no texto recibido")
-                continue
+    np_arr = np.frombuffer(img_bytes, np.uint8)
+    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-            try:
-                data = json.loads(msg)
-            except json.JSONDecodeError:
-                print("JSON inválido")
-                continue
+    if frame is None:
+        return
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    for det in data["detections"]:
+        x = det["x"]
+        y = det["y"]
+        w = det["w"]
+        h = det["h"]
+        score = det["score"]
 
-            if "image" not in data:
-                print("JSON sin imagen")
-                continue
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(
+            frame,
+            f'{det["label"]} {score:.2f}',
+            (x, y - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1
+        )
 
-            # Decodificar imagen
-            img_bytes = base64.b64decode(data["image"])
-            img_array = np.frombuffer(img_bytes, dtype=np.uint8)
-            frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
-            if frame is None:
-                print("Error decodificando imagen")
-                continue
-            detections = data.get("detections", [])
+        padding = 20
+        x1 = max(0, x - padding)
+        y1 = max(0, y - padding)
+        x2 = min(frame.shape[1], x + w + padding)
+        y2 = min(frame.shape[0], y + h + padding)
+        
+        person_roi = rgb_frame[y1:y2, x1:x2]
+        
+        if person_roi.size == 0:
+            continue
+        
+        # Detectar pose
+        results = pose_detector.process(person_roi)
+        
+        if results.pose_landmarks:
+            # Ajustar coordenadas
             
-            viewFrame.mostrar_frame(frame, detections)
-
-            current_time = time.time()
             
-            if len(detections) > 0:
-                if person_detected_since is None:
-                    person_detected_since = current_time
-
-                elapsed = current_time - person_detected_since
-                if elapsed >= 5 and not recording:
-                    filename = datetime.now().strftime("videos/persona_%Y%m%d_%H%M%S.mp4")
-                    h, w, _ = frame.shape
-                    video_writer = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*"XVID"), 25.0, (w, h))
-                    video_writer.write(viewFrame.img_procesada(frame, detections))
-                    recording = True
-                    
-                elif recording:
-                    
-                    video_writer.write(viewFrame.img_procesada(frame, detections))
-            else:
-                person_detected_since = None
-                if recording:
-                    recording = False
-                    video_writer.release()
-                    # enviar_video(filename, caption="Video de persona detectada")
-                    video_writer = None       
+            for landmark in results.pose_landmarks.landmark:
+                landmark.x = (landmark.x * (x2 - x1) + x1) / frame.shape[1]
+                landmark.y = (landmark.y * (y2 - y1) + y1) / frame.shape[0]
             
+            
+            mp_drawing.draw_landmarks(
+                frame,
+                results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS
+            )
+        # print(detec)
+    
+    cv2.imshow("Video", frame)
+    
+    cv2.waitKey(1) 
 
-            clock.tick(30)
+
+    
+    # detections = data.get("detections", [])
+    # current_time = time.time()
+    
+    # if len(detections) > 0:
+    #     if person_detected_since is None:
+    #         person_detected_since = current_time
+    #     elapsed = current_time - person_detected_since
+    #     if elapsed >= 5 and not recording:
+    #         print("Grabando video")
+    #         filename = datetime.now().strftime("videos/persona_%Y%m%d_%H%M%S.mp4")
+    #         h, w, _ = frame.shape
+    #         video_writer = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc(*"XVID"), 25.0, (w, h))
+    #         video_writer.write(frame)
+    #         recording = True
+            
+    #     elif recording:
+    #         video_writer.write(frame)
+    # else:
+    #     person_detected_since = None
+    #     if recording:
+    #         recording = False
+    #         video_writer.release()
+    #         print("Enviando...")
+    #         enviar_video(filename, caption="Video de persona detectada")
+    #         video_writer = None       
+    
+    clock.tick(30)
 
 
-asyncio.run(receive_video())
+if __name__ == "__main__":
+    ws = websocket.WebSocketApp(
+        "ws://localhost:9092",
+        on_message=on_message,
+    )
+    ws.run_forever()
+    cv2.destroyAllWindows()  # Limpieza al salir

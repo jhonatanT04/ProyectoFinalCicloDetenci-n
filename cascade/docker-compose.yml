@@ -1,0 +1,16 @@
+services:
+  opencv-trainer:
+    build: .
+    container_name: cascade-trainer
+    volumes:
+      - ./Personas:/cascade/Personas:ro
+      - ./negativos:/cascade/negativos:ro
+      - ./data:/cascade/data
+      - ./scripts:/cascade/scripts
+    working_dir: /cascade
+    command: tail -f /dev/null
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G

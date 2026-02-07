@@ -7,3 +7,10 @@ EntrenamientoSVM/Person-detection-7
 EntrenamientoSVM/street-objects-3
 lbp-library
 vision.bin
+EntrenamientoSVM/Personas
+EntrenamientoSVM/Ania
+EntrenamientoSVM/negativos
+cascade/data
+cascade/negativos
+cascade/Personas
+SegmentacionPosturas/videos
