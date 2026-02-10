@@ -22,9 +22,9 @@ VEC_FILE="$OUTPUT_DIR/positives.vec"
 CASCADE_DIR="$OUTPUT_DIR/cascade"
 
 # Parámetros
-NUM_STAGES=10
-W=24
-H=24
+NUM_STAGES=8
+W=128       
+H=256
 
 mkdir -p "$OUTPUT_DIR" "$CASCADE_DIR"
 
@@ -38,7 +38,8 @@ if [ "$TOTAL_POS" -lt 1 ]; then
 fi
 
 # Crear .vec con TODAS las muestras disponibles (o un número alto)
-VEC_SAMPLES=$((TOTAL_POS > 7000 ? 7000 : TOTAL_POS))
+# VEC_SAMPLES=$((TOTAL_POS > 7000 ? 7000 : TOTAL_POS))
+VEC_SAMPLES=450
 
 echo "Creando archivo .vec con $VEC_SAMPLES muestras..."
 
@@ -62,8 +63,11 @@ rm -f "$POS_TMP"
 # NUM_POS debe ser significativamente menor que VEC_SAMPLES
 # Fórmula: NUM_POS = VEC_SAMPLES * 0.8 / (1 + 0.1 * NUM_STAGES)
 
-NUM_POS=$(awk "BEGIN {print int($VEC_SAMPLES * 0.8 / (1.0 + 0.1 * $NUM_STAGES))}")
-NUM_NEG=$((NUM_POS / 2))  # Negativas: aproximadamente la mitad de positivas
+# NUM_POS=$(awk "BEGIN {print int($VEC_SAMPLES * 0.8 / (1.0 + 0.1 * $NUM_STAGES))}")
+NUM_POS=250
+
+# NUM_NEG=$((NUM_POS / 2))  # Negativas: aproximadamente la mitad de positivas
+NUM_NEG=893
 
 echo ""
 echo "=========================================="
