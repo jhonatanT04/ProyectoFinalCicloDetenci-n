@@ -3,6 +3,7 @@
 .vscode
 vision
 vision_mp
+interfaceApp/TelegramBot/__pycache__
 interfaceApp/__pycache__
 build
 ModelosCascade/Person-detection-7

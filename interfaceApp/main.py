@@ -9,15 +9,17 @@ import numpy as np
 import time
 from datetime import datetime
 import mediapipe as mp
-from telegram import enviar_video, lista_contactos, cargar_contactos
+from TelegramBot.funcioneTelegram import enviar_video, cargar_contactos
 from PIL import Image, ImageTk
 import os
+import psutil
+import GPUtil
 
 class VideoDetectorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Sistema de Detección y Telegram Bot")
-        self.root.geometry("1200x700")
+        self.root.geometry("1200x750")
         
         # Variables
         self.ws = None
@@ -27,6 +29,11 @@ class VideoDetectorGUI:
         self.video_writer = None
         self.filename = None
         self.current_frame = None
+        
+        # Variables para FPS
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0
         
         # MediaPipe
         mp_pose = mp.solutions.pose
@@ -39,8 +46,14 @@ class VideoDetectorGUI:
             min_tracking_confidence=0.5
         )
         
+        # Proceso para memoria
+        self.process = psutil.Process(os.getpid())
+        
         self.setup_ui()
         self.actualizar_lista_contactos()
+        
+        # Iniciar actualización de estadísticas
+        self.actualizar_estadisticas_sistema()
         
     def setup_ui(self):
         # Contenedor principal
@@ -53,7 +66,7 @@ class VideoDetectorGUI:
         
         # Sección de Contactos
         contactos_frame = tk.LabelFrame(left_panel, text="Lista de Contactos", font=("Arial", 12, "bold"))
-        contactos_frame.pack(fill=tk.BOTH, expand=True)
+        contactos_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
         # Lista de contactos con scrollbar
         scrollbar_contactos = tk.Scrollbar(contactos_frame)
@@ -78,6 +91,49 @@ class VideoDetectorGUI:
             font=("Arial", 10)
         )
         btn_refrescar.pack(pady=5)
+        
+        # Sección de Estadísticas del Sistema
+        stats_frame = tk.LabelFrame(left_panel, text="Estadísticas del Sistema", font=("Arial", 12, "bold"))
+        stats_frame.pack(fill=tk.BOTH, expand=False)
+        
+        # Frame interno para estadísticas
+        stats_inner = tk.Frame(stats_frame)
+        stats_inner.pack(fill=tk.BOTH, padx=10, pady=10)
+        
+        # FPS
+        fps_container = tk.Frame(stats_inner)
+        fps_container.pack(fill=tk.X, pady=5)
+        tk.Label(fps_container, text="FPS:", font=("Arial", 10, "bold"), width=12, anchor='w').pack(side=tk.LEFT)
+        self.fps_label = tk.Label(fps_container, text="0.0", font=("Arial", 10), fg="green")
+        self.fps_label.pack(side=tk.LEFT)
+        
+        # Memoria RAM del proceso
+        mem_proc_container = tk.Frame(stats_inner)
+        mem_proc_container.pack(fill=tk.X, pady=5)
+        tk.Label(mem_proc_container, text="RAM Proceso:", font=("Arial", 10, "bold"), width=12, anchor='w').pack(side=tk.LEFT)
+        self.mem_proc_label = tk.Label(mem_proc_container, text="0 MB", font=("Arial", 10), fg="blue")
+        self.mem_proc_label.pack(side=tk.LEFT)
+        
+        # Memoria RAM total del sistema
+        mem_sys_container = tk.Frame(stats_inner)
+        mem_sys_container.pack(fill=tk.X, pady=5)
+        tk.Label(mem_sys_container, text="RAM Sistema:", font=("Arial", 10, "bold"), width=12, anchor='w').pack(side=tk.LEFT)
+        self.mem_sys_label = tk.Label(mem_sys_container, text="0%", font=("Arial", 10), fg="blue")
+        self.mem_sys_label.pack(side=tk.LEFT)
+        
+        # GPU
+        gpu_container = tk.Frame(stats_inner)
+        gpu_container.pack(fill=tk.X, pady=5)
+        tk.Label(gpu_container, text="GPU:", font=("Arial", 10, "bold"), width=12, anchor='w').pack(side=tk.LEFT)
+        self.gpu_label = tk.Label(gpu_container, text="N/A", font=("Arial", 10), fg="purple")
+        self.gpu_label.pack(side=tk.LEFT)
+        
+        # GPU Memoria
+        gpu_mem_container = tk.Frame(stats_inner)
+        gpu_mem_container.pack(fill=tk.X, pady=5)
+        tk.Label(gpu_mem_container, text="GPU Memoria:", font=("Arial", 10, "bold"), width=12, anchor='w').pack(side=tk.LEFT)
+        self.gpu_mem_label = tk.Label(gpu_mem_container, text="N/A", font=("Arial", 10), fg="purple")
+        self.gpu_mem_label.pack(side=tk.LEFT)
         
         # Panel Derecho
         right_panel = tk.Frame(main_container)
@@ -153,6 +209,106 @@ class VideoDetectorGUI:
         self.lista_contactos_widget.insert(0, f"  Total: {len(contactos)} contacto(s)")
         self.lista_contactos_widget.itemconfig(0, {'bg': '#E3F2FD'})
     
+    def calcular_fps(self):
+        """Calcula los FPS actuales"""
+        self.fps_counter += 1
+        elapsed = time.time() - self.fps_start_time
+        
+        if elapsed > 1.0:  # Actualizar cada segundo
+            self.current_fps = self.fps_counter / elapsed
+            self.fps_counter = 0
+            self.fps_start_time = time.time()
+        
+        return self.current_fps
+    
+    def obtener_estadisticas_sistema(self):
+        """Obtiene estadísticas del sistema"""
+        stats = {}
+        
+        # Memoria del proceso
+        mem_info = self.process.memory_info()
+        stats['mem_proceso'] = mem_info.rss / (1024 * 1024)  # MB
+        
+        # Memoria del sistema
+        mem_sys = psutil.virtual_memory()
+        stats['mem_sistema_percent'] = mem_sys.percent
+        stats['mem_sistema_used'] = mem_sys.used / (1024 * 1024 * 1024)  # GB
+        stats['mem_sistema_total'] = mem_sys.total / (1024 * 1024 * 1024)  # GB
+        
+        # GPU
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu = gpus[0]  # Primera GPU
+                stats['gpu_load'] = gpu.load * 100
+                stats['gpu_mem_used'] = gpu.memoryUsed
+                stats['gpu_mem_total'] = gpu.memoryTotal
+                stats['gpu_mem_percent'] = (gpu.memoryUsed / gpu.memoryTotal) * 100
+                stats['gpu_temp'] = gpu.temperature
+                stats['gpu_name'] = gpu.name
+            else:
+                stats['gpu_available'] = False
+        except:
+            stats['gpu_available'] = False
+        
+        return stats
+    
+    def actualizar_estadisticas_sistema(self):
+        """Actualiza las estadísticas del sistema en la UI"""
+        if not hasattr(self, 'fps_label'):
+            return
+        
+        stats = self.obtener_estadisticas_sistema()
+        
+        # Actualizar FPS
+        self.fps_label.config(text=f"{self.current_fps:.1f}")
+        
+        # Actualizar Memoria del Proceso
+        self.mem_proc_label.config(text=f"{stats['mem_proceso']:.1f} MB")
+        
+        # Actualizar Memoria del Sistema
+        mem_text = f"{stats['mem_sistema_percent']:.1f}% ({stats['mem_sistema_used']:.1f}/{stats['mem_sistema_total']:.1f} GB)"
+        self.mem_sys_label.config(text=mem_text)
+        
+        # Actualizar GPU
+        if stats.get('gpu_available', True) and 'gpu_load' in stats:
+            gpu_text = f"{stats['gpu_load']:.1f}% | {stats['gpu_temp']:.0f}°C"
+            self.gpu_label.config(text=gpu_text)
+            
+            gpu_mem_text = f"{stats['gpu_mem_percent']:.1f}% ({stats['gpu_mem_used']:.0f}/{stats['gpu_mem_total']:.0f} MB)"
+            self.gpu_mem_label.config(text=gpu_mem_text)
+        else:
+            self.gpu_label.config(text="No disponible")
+            self.gpu_mem_label.config(text="No disponible")
+        
+        # Programar siguiente actualización
+        self.root.after(1000, self.actualizar_estadisticas_sistema)
+    
+    def dibujar_estadisticas(self, frame):
+        """Dibuja FPS y memoria en el frame"""
+        fps = self.calcular_fps()
+        memoria = self.process.memory_info().rss / (1024 * 1024)
+        
+        # Configuración de texto
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+        
+        # Fondo semi-transparente para mejor legibilidad
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (10, 10), (280, 80), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        
+        # Texto FPS
+        fps_text = f"FPS: {fps:.1f}"
+        cv2.putText(frame, fps_text, (20, 35), font, font_scale, (0, 255, 0), thickness)
+        
+        # Texto Memoria
+        memoria_text = f"Memoria: {memoria:.1f} MB"
+        cv2.putText(frame, memoria_text, (20, 65), font, font_scale, (0, 255, 255), thickness)
+        
+        return frame
+    
     def iniciar_websocket(self):
         """Inicia la conexión WebSocket"""
         if self.running:
@@ -162,6 +318,11 @@ class VideoDetectorGUI:
         self.btn_iniciar.config(state=tk.DISABLED)
         self.btn_detener.config(state=tk.NORMAL)
         self.estado_label.config(text="Estado: Conectando...", fg="orange")
+        
+        # Reiniciar contador de FPS
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0
         
         threading.Thread(target=self.conectar_websocket, daemon=True).start()
     
@@ -242,6 +403,9 @@ class VideoDetectorGUI:
                         self.mp_pose.POSE_CONNECTIONS
                     )
         
+        # Dibujar estadísticas (FPS y Memoria)
+        frame = self.dibujar_estadisticas(frame)
+        
         # Lógica de grabación
         detections = data.get("detections", [])
         current_time = time.time()
@@ -256,7 +420,7 @@ class VideoDetectorGUI:
                 fg="orange"
             ))
             
-            if elapsed >= 5 and not self.recording:
+            if elapsed >= 2 and not self.recording:
                 if not os.path.exists("videos"):
                     os.makedirs("videos")
                     
