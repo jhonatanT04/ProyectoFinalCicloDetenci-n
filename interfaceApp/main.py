@@ -9,7 +9,7 @@ import numpy as np
 import time
 from datetime import datetime
 import mediapipe as mp
-from TelegramBot.funcioneTelegram import enviar_video, cargar_contactos
+from TelegramBot.funcioneTelegram import enviar_video, cargar_contactos, guardar_contactos
 from PIL import Image, ImageTk
 import os
 import psutil
@@ -81,16 +81,33 @@ class VideoDetectorGUI:
         self.lista_contactos_widget.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         scrollbar_contactos.config(command=self.lista_contactos_widget.yview)
         
+        # Frame para botones de contactos
+        btn_contactos_frame = tk.Frame(contactos_frame)
+        btn_contactos_frame.pack(pady=5)
+        
         # Botón refrescar contactos
         btn_refrescar = tk.Button(
-            contactos_frame,
+            btn_contactos_frame,
             text="Refrescar",
             command=self.actualizar_lista_contactos,
             bg="#4CAF50",
             fg="white",
-            font=("Arial", 10)
+            font=("Arial", 10),
+            width=12
         )
-        btn_refrescar.pack(pady=5)
+        btn_refrescar.pack(side=tk.LEFT, padx=2)
+        
+        # Botón eliminar contacto
+        btn_eliminar = tk.Button(
+            btn_contactos_frame,
+            text="Eliminar",
+            command=self.eliminar_contacto,
+            bg="#f44336",
+            fg="white",
+            font=("Arial", 10),
+            width=12
+        )
+        btn_eliminar.pack(side=tk.LEFT, padx=2)
         
         # Sección de Estadísticas del Sistema
         stats_frame = tk.LabelFrame(left_panel, text="Estadísticas del Sistema", font=("Arial", 12, "bold"))
@@ -208,6 +225,56 @@ class VideoDetectorGUI:
         
         self.lista_contactos_widget.insert(0, f"  Total: {len(contactos)} contacto(s)")
         self.lista_contactos_widget.itemconfig(0, {'bg': '#E3F2FD'})
+    
+    def eliminar_contacto(self):
+        """Elimina el contacto seleccionado"""
+        seleccion = self.lista_contactos_widget.curselection()
+        
+        if not seleccion:
+            messagebox.showwarning("Advertencia", "Selecciona un contacto para eliminar")
+            return
+        
+        # Obtener el índice seleccionado
+        index = seleccion[0]
+        
+        # Si seleccionó la primera línea (Total) o no hay contactos
+        if index == 0:
+            messagebox.showwarning("Advertencia", "Selecciona un contacto válido para eliminar")
+            return
+        
+        # Obtener el texto del contacto seleccionado
+        texto = self.lista_contactos_widget.get(index)
+        
+        if "No hay contactos" in texto:
+            return
+        
+        # Extraer el chat_id del texto
+        try:
+            # El formato es "  N. Chat ID: XXXXXXXXX"
+            chat_id = texto.split("Chat ID: ")[1].strip()
+        except:
+            messagebox.showerror("Error", "No se pudo obtener el Chat ID")
+            return
+        
+        # Confirmar eliminación
+        respuesta = messagebox.askyesno(
+            "Confirmar eliminación",
+            f"¿Estás seguro de eliminar el contacto?\n\nChat ID: {chat_id}"
+        )
+        
+        if not respuesta:
+            return
+        
+        # Eliminar del archivo
+        contactos = cargar_contactos()
+        
+        if chat_id in contactos:
+            contactos.remove(chat_id)
+            guardar_contactos(contactos)
+            messagebox.showinfo("Éxito", f"Contacto {chat_id} eliminado correctamente")
+            self.actualizar_lista_contactos()
+        else:
+            messagebox.showerror("Error", "El contacto no existe en la lista")
     
     def calcular_fps(self):
         """Calcula los FPS actuales"""
